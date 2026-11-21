@@ -51,13 +51,21 @@
       background: radial-gradient(circle at center, #14182b 0%, #06070d 100%);
     }
 
+    #game-area {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     #game-wrapper {
       position: relative;
-      width: 100%;
-      height: 100%;
-      max-width: calc((100vh - 58px) * (4 / 3));
-      max-height: calc((100vw - 16px) * (3 / 4));
-      aspect-ratio: 4 / 3;
+      flex: none;
+      width: 90vw;   /* real size is set by the script to fit the screen */
+      height: 60vw;
       border-top: 3px solid var(--amiga-border-light);
       border-left: 3px solid var(--amiga-border-light);
       border-right: 3px solid var(--amiga-border-dark);
@@ -168,14 +176,7 @@
     /* Phones in landscape: game fills the height, buttons sit in a column beside it */
     @media (orientation: landscape) and (max-height: 520px) {
       #monitor-frame { flex-direction: row; gap: 8px; padding: 8px; }
-      #game-wrapper {
-        --h: min(calc(100vh - 16px), calc((100vw - 160px) * 0.75));
-        height: var(--h);
-        width: calc(var(--h) * 1.3333);
-        max-width: none;
-        max-height: none;
-        flex: 0 0 auto;
-      }
+      #game-area { height: 100%; width: auto; }
       #control-bar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 132px; margin-top: 0; gap: 6px; }
       .amiga-btn { font-size: 8px; padding: 8px 6px; }
     }
@@ -183,9 +184,11 @@
 </head>
 <body>
   <div id="monitor-frame">
-    <div id="game-wrapper">
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
-      <div id="crt-overlay"></div>
+    <div id="game-area">
+      <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="crt-overlay"></div>
+      </div>
     </div>
 
     <div id="control-bar">
@@ -226,7 +229,7 @@
       const ctx = canvas ? canvas.getContext('2d') : null;
       if (!canvas || !ctx) return;
 
-      const CANVAS_W = 800;
+      let CANVAS_W = 800;   // playfield width adapts to the screen (see fitLayout)
       const CANVAS_H = 600;
       canvas.width = CANVAS_W;
       canvas.height = CANVAS_H;
@@ -239,8 +242,8 @@
       const PLAY_LEFT = 0;
       const PLAY_TOP = TOP_HUD_H + WALL_THICK;
       const PLAY_BOTTOM = CANVAS_H - BOT_HUD_H - WALL_THICK;
-      const PLAY_RIGHT = CANVAS_W - FORCE_PANEL_W - WALL_THICK;
-      const BACK_WALL_X = PLAY_RIGHT;
+      let PLAY_RIGHT = CANVAS_W - FORCE_PANEL_W - WALL_THICK;
+      let BACK_WALL_X = PLAY_RIGHT;
       const BACK_WALL_SEGMENTS = 12;
       const BACK_WALL_HIT_LIMIT = 10;
 
@@ -249,7 +252,7 @@
       const BRICK_W = 28;
       const BRICK_H = 34;
       const BRICK_GAP = 3;
-      const GRID_OFFSET_X = 282;
+      let GRID_OFFSET_X = PLAY_RIGHT - 458;   // bricks stay anchored to the back wall
       const GRID_OFFSET_Y = PLAY_TOP + 22;
 
       // ~30% easier velocities, gravity & paddle dimensions
@@ -2243,7 +2246,51 @@
         requestAnimationFrame(tick);
       }
 
+      const MIN_ASPECT = 4 / 3;
+      const MAX_ASPECT = 2.6;
+
+      function applyFieldWidth(w) {
+        if (w === CANVAS_W) return;
+        const oldRight = PLAY_RIGHT;
+        CANVAS_W = w;
+        canvas.width = w;
+        PLAY_RIGHT = CANVAS_W - FORCE_PANEL_W - WALL_THICK;
+        BACK_WALL_X = PLAY_RIGHT;
+        GRID_OFFSET_X = PLAY_RIGHT - 458;
+        const dx = PLAY_RIGHT - oldRight;
+        bricks.forEach(b => { b.x += dx; });
+        backWall.forEach(sg => { sg.x += dx; });
+        const clampIn = o => { if (!state.backWallOpen && o.x + o.r > PLAY_RIGHT) o.x = PLAY_RIGHT - o.r; };
+        balls.forEach(clampIn);
+        demoBalls.forEach(clampIn);
+        saws.forEach(clampIn);
+      }
+
+      // Make the playfield as wide as the screen allows (height stays 600 logical px).
+      function fitLayout() {
+        const area = document.getElementById('game-area');
+        const wrap = document.getElementById('game-wrapper');
+        if (!area || !wrap) return;
+        const aw = area.clientWidth;
+        const ah = area.clientHeight;
+        if (!aw || !ah) return;
+        const ar = Math.max(MIN_ASPECT, Math.min(MAX_ASPECT, aw / ah));
+        applyFieldWidth(Math.round(CANVAS_H * ar));
+        const pw = Math.floor(Math.min(aw, ah * ar));
+        wrap.style.width = pw + 'px';
+        wrap.style.height = Math.floor(pw / ar) + 'px';
+      }
+
+      window.addEventListener('resize', fitLayout);
+      window.addEventListener('orientationchange', fitLayout);
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(fitLayout);
+        const areaEl = document.getElementById('game-area');
+        if (areaEl) ro.observe(areaEl);
+      }
+
       function bootGame() {
+        fitLayout();
         if (document.fonts && document.fonts.load) {
           Promise.all([
             document.fonts.load('10px "Press Start 2P"'),
