@@ -337,7 +337,7 @@
               this.sfxGain.connect(this.masterGain);
 
               this.musicGain = this.ctx.createGain();
-              this.musicGain.gain.value = this.musicEnabled ? 0.20 : 0;
+              this.musicGain.gain.value = this.musicEnabled ? 0.30 : 0;
               this.musicGain.connect(this.masterGain);
             }
             if (this.ctx.state === 'suspended') {
@@ -362,7 +362,7 @@
           this.musicEnabled = Boolean(enabled);
           if (this.musicGain && this.ctx) {
             try {
-              this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.20 : 0, this.ctx.currentTime);
+              this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.30 : 0, this.ctx.currentTime);
             } catch (_) {}
           }
         }
